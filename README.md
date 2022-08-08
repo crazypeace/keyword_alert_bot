@@ -1,3 +1,38 @@
+# 写给新手的搭建指南
+## 1. 账户
+### Create Telelgram Account & API
+https://my.telegram.org/apps
+
+开通api 建议请使用新注册的Telegram账户
+
+得到 api_id, api_hash
+![chrome_2022-08-08_11-04-17](https://user-images.githubusercontent.com/665889/183333531-ea69d6c8-b720-4efa-9c6e-fc31f2b5a252.png)
+
+### Create BOT
+https://t.me/BotFather
+
+/start
+
+/newbot
+
+bot的name
+
+bot的username
+
+得到 token to access the HTTP API
+
+![Telegram_2022-08-08_10-57-30](https://user-images.githubusercontent.com/665889/183334493-b6a906b4-bf0a-45ae-91be-ed1e5f2f2aa4.png)
+
+## 2. 配置文件config.yaml
+
+修改如下字段
+
+![Notepad3_2022-08-08_11-09-15-1](https://user-images.githubusercontent.com/665889/183334604-854fecfe-9499-4dd0-bfb2-b85a29a4baa8.png)
+
+phone 改为你的新Telegram账户的电话号码
+
+username 改为你的新Telegram账户的username
+
 
 # 🤖Telegram keyword alert bot ⏰
 
