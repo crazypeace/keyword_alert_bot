@@ -23,7 +23,25 @@ bot的username
 
 ![Telegram_2022-08-08_10-57-30](https://user-images.githubusercontent.com/665889/183334493-b6a906b4-bf0a-45ae-91be-ed1e5f2f2aa4.png)
 
-## 2. 配置文件config.yaml
+## 2. 运行环境
+
+### 从GitHub拉程序文件
+获得压缩包地址
+![image](https://user-images.githubusercontent.com/665889/183339082-e409da96-6dfe-46e4-a592-9c434ebfd0bd.png)
+
+```
+cd /etc/
+wget https://github.com/crazypeace/keyword_alert_bot/archive/refs/heads/master.zip
+unzip master.zip
+cd keyword_alert_bot-master/
+```
+### 准备python相关组件
+基于Debian 11 环境
+```
+apt install -y pip 
+pip install telethon peewee PySocks diskcache PyYAML asyncstdlib
+```
+## 3. 配置文件config.yaml
 
 修改如下字段
 
@@ -32,6 +50,17 @@ bot的username
 phone 改为你的新Telegram账户的电话号码
 
 username 改为你的新Telegram账户的username
+
+## 4. 运行bot
+```
+python3 ./main.py
+```
+脚本窗口提示你输入验证码，同时，你的新Telegram账户会收到一个验证码
+
+![image](https://user-images.githubusercontent.com/665889/183342317-6fd4e4a3-5670-4f97-b09c-11f8236024d8.png)
+
+将这个验证码输入到脚本窗口
+
 
 
 # 🤖Telegram keyword alert bot ⏰
