@@ -38,6 +38,7 @@ cd keyword_alert_bot-master/
 ### 准备python相关组件
 基于Debian 11 环境
 ```
+apt update
 apt install -y pip 
 pip install telethon peewee PySocks diskcache PyYAML asyncstdlib
 ```
