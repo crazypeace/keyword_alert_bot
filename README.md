@@ -52,7 +52,7 @@ phone 改为你的新Telegram账户的电话号码
 
 username 改为你的新Telegram账户的username
 
-## 4. 运行bot
+## 4. 第一次运行bot
 ```
 python3 ./main.py
 ```
@@ -62,7 +62,29 @@ python3 ./main.py
 
 将这个验证码输入到脚本窗口
 
+## 5. 长期运行bot
 
+### 用screen在后台运行
+
+```
+apt install -y screen
+screen
+python3 ./main.py
+```
+
+### 用crontab计划任务
+
+```
+crontab -e
+```
+第一次运行会提示你用哪个编辑器，选你喜欢的就好，小白推荐用nano，操作起来和Win的notepad比较像
+
+输入下面这行再保存
+```
+@reboot ( sleep 120 ; python3 /etc/keyword_alert_bot-master/main.py )
+```
+
+意思是每次重启后，等待120秒，再执行后面那句shell命令
 
 # 🤖Telegram keyword alert bot ⏰
 
