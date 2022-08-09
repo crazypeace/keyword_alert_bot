@@ -43,7 +43,7 @@ apt update
 apt install -y pip 
 pip install telethon peewee PySocks diskcache PyYAML asyncstdlib
 ```
-## 3. 配置文件config.yaml
+## 3. 配置文件config.yml
 
 修改如下字段
 
@@ -57,6 +57,7 @@ username 改为你的新Telegram账户的username
 ```
 python3 ./main.py
 ```
+
 脚本窗口提示你输入验证码，同时，你的新Telegram账户会收到一个验证码
 
 ![image](https://user-images.githubusercontent.com/665889/183342317-6fd4e4a3-5670-4f97-b09c-11f8236024d8.png)
@@ -81,6 +82,7 @@ crontab -e
 第一次运行会提示你用哪个编辑器，选你喜欢的就好，小白推荐用nano，操作起来和Win的notepad比较像
 
 输入下面这行再保存
+
 ```
 @reboot ( sleep 120 ; python3 /etc/keyword_alert_bot-master/main.py )
 ```
