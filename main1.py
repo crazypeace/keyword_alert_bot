@@ -83,7 +83,6 @@ from user_subscribe_list
         # 优先返回可预览url
         channel_url = f'https://t.me/{event.chat.username}/' if event.chat.username else get_channel_url(event.chat.username,event.chat_id)
         channel_msg_url= f'{channel_url}{message.id}'
-        send_cache_key = f'_LAST_{l_id}_{message.id}_send'
 
         chat_title = event.chat.username if event.chat.username else event.chat.title
         sender = await message.get_sender()
@@ -314,7 +313,7 @@ async def add_keyword(event):
     raise events.StopPropagation
   elif len(splitd)  == 2:
     command, keywords = splitd
-    result = await add_keywordlist(keywords.split(','))
+    result = add_keywordlist(keywords.split(','))
     if isinstance(result,str): 
         logger.error('add_keywordlist 错误：'+result)
         await event.respond(result) # 提示错误消息
@@ -335,6 +334,7 @@ def add_keywordlist(keywords_list):
   """
   订阅关键字
   """
+  result = []
   for keyword in keywords_list:
     keyword = keyword.strip()
     find = utils.db.user_subscribe_list.get_or_none(**{
@@ -344,7 +344,7 @@ def add_keywordlist(keywords_list):
       result.append((keyword))
     else:
       insert_res = utils.db.user_subscribe_list.create(**{
-        'user_id':'',
+        'id':'',
         'keywords':keyword,
         'channel_name':'',
         'create_time':datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -373,7 +373,7 @@ async def del_keyword(event):
     raise events.StopPropagation
   elif len(splitd)  == 2:
     command, keywords = splitd
-    result = await del_keywordlist(keywords.split(','))
+    result = del_keywordlist(keywords.split(','))
     if isinstance(result,str): 
         logger.error('add_keywordlist 错误：'+result)
         await event.respond(result) # 提示错误消息
@@ -394,6 +394,7 @@ def del_keywordlist(keywords_list):
   """
   取消订阅关键字
   """
+  result = []
   for keyword in keywords_list:
     keyword = keyword.strip()
     isdel = utils.db.user_subscribe_list.delete().where(utils.User_subscribe_list.keywords == keyword).execute()
@@ -421,8 +422,8 @@ async def del_id(event):
     await event.respond('命令格式 /del_id 关键字ID1,关键字ID2')
     raise events.StopPropagation
   elif len(splitd)  == 2:
-    command, keywords = splitd
-    result = await del_keywordidlist(keywords.split(','))
+    command, keywordids = splitd
+    result = del_keywordidlist(keywordids.split(','))
     if isinstance(result,str): 
         logger.error('add_keywordlist 错误：'+result)
         await event.respond(result) # 提示错误消息
@@ -443,14 +444,18 @@ def del_keywordidlist(keywords_idlist):
   """
   取消订阅关键字
   """
+  result = []
   for keywordid in keywords_idlist:
     keywordid = keywordid.strip()
-    find = utils.db.connect.execute_sql('select id,keywords from user_subscribe_list where user_id = %d' % (keywordid,0) ).fetchall()
+    find = utils.db.connect.execute_sql('select id,keywords from user_subscribe_list where id = %s' % (keywordid) ).fetchall()
     if find:
       for id,keywords in find:
         isdel = utils.db.user_subscribe_list.delete().where(utils.User_subscribe_list.id == id).execute()
         if isdel:
-          result.append((keywords))          
+          result.append((keywords))
+          logger.debug('del_keywordidlist 成功：' + keywordid)
+    else:
+      logger.error('del_keywordidlist 错误：' + keywordid + 'not found')
   return result  
 
 
@@ -458,7 +463,11 @@ def del_keywordidlist(keywords_idlist):
 async def delete_all(event):
   """Send a message when the command /delete_all is issued."""
   # 检查使用者的telegram ID
-  await check_user_id(event.message.chat.id)    
+  find = utils.db.user.get_or_none(chat_id=event.message.chat.id)
+  if not find:# 不存在用户信息
+    await event.respond('Failed. Please input /start')
+    raise events.StopPropagation  
+    
   isdel = utils.db.user_subscribe_list.delete().execute()
   await event.respond('delete_all successfully')
   raise events.StopPropagation
@@ -478,11 +487,11 @@ async def _list(event):
   if find:
     msg = ''
     for id,keywords in find:
-      msg += f'{keywords}\n'
-      text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
-      for text, entities in telethon_utils.split_text(text, entities):
-        # await client.send_message(chat, text, formatting_entities=entities)
-        await event.respond(text,formatting_entities=entities) 
+      msg += f'{id}, {keywords}\n'
+    text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
+    for text, entities in telethon_utils.split_text(text, entities):
+      # await client.send_message(chat, text, formatting_entities=entities)
+      await event.respond(text,formatting_entities=entities) 
   else:
     await event.respond('not found list')
   raise events.StopPropagation
