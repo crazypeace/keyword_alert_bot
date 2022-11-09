@@ -27,9 +27,10 @@ class _Base(Model):
   class Meta:
       database = _connect
 
+# 记录关键字机器人的用户
 class User(_Base):
   """用户数据表
-  id chat_id create_time
+  chat_id create_time
   """
   chat_id = IntegerField(index=True,unique=True)
   create_time = DateTimeField('%Y-%m-%d %H:%M:%S',index=True)
@@ -41,6 +42,8 @@ class User(_Base):
             # (('price','type','time'), False), # 联合索引
         )
 
+# id 关键字的ID，方便直接指定ID删除
+# keywords 订阅的关键字
 class User_subscribe_list(_Base):
   """
   用户订阅表
