@@ -34,7 +34,7 @@ apt update
 apt install -y wget unzip
 ```
 ```
-cd /etc/
+cd 
 wget https://github.com/crazypeace/keyword_alert_bot/archive/refs/heads/master.zip
 unzip master.zip
 cd keyword_alert_bot-master/
