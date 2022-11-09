@@ -75,81 +75,43 @@ async def on_greeting(event):
 
       # 查找当前频道的所有订阅
       sql = """
-      select u.chat_id,l.keywords,l.id,l.chat_id
-from user_subscribe_list as l  
-INNER JOIN user as u on u.id = l.user_id 
-where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create_time  desc
+select id, keywords 
+from user_subscribe_list
       """
-      find = utils.db.connect.execute_sql(sql,(event.chat.username,str(event.chat_id))).fetchall()
+      find = utils.db.connect.execute_sql(sql).fetchall()
       if find:
-        logger.info(f'channel: {event.chat.username}; all chat_id & keywords:{find}') # 打印当前频道，订阅的用户以及关键字
+        # 优先返回可预览url
+        channel_url = f'https://t.me/{event.chat.username}/' if event.chat.username else get_channel_url(event.chat.username,event.chat_id)
+        channel_msg_url= f'{channel_url}{message.id}'
+        send_cache_key = f'_LAST_{l_id}_{message.id}_send'
 
-        for receiver,keywords,l_id,l_chat_id in find:
+        chat_title = event.chat.username if event.chat.username else event.chat.title
+        sender = await message.get_sender()
+
+        for id, keywords in find:
           try:
-            # 消息发送去重规则
-            MSG_UNIQUE_RULE_MAP = {
-              'SUBSCRIBE_ID': f'{receiver}_{l_id}',
-              'MESSAGE_ID': f'{receiver}_{message.id}',
-            }
-            if 'msg_unique_rule' not in config:
-              config['msg_unique_rule'] = 'SUBSCRIBE_ID'
-            assert config['msg_unique_rule'] in MSG_UNIQUE_RULE_MAP,'config "msg_unique_rule" error!!!'
-            CACHE_KEY_UNIQUE_SEND = MSG_UNIQUE_RULE_MAP[config['msg_unique_rule']]
-            logger.debug(f'msg_unique_rule:{config["msg_unique_rule"]} --> {CACHE_KEY_UNIQUE_SEND}')
-
-            # 优先返回可预览url
-            channel_url = f'https://t.me/{event.chat.username}/' if event.chat.username else get_channel_url(event.chat.username,event.chat_id)
-            channel_msg_url= f'{channel_url}{message.id}'
-            send_cache_key = f'_LAST_{l_id}_{message.id}_send'
-            if isinstance(event,events.MessageEdited.Event):# 编辑事件
-              # 24小时内新建2秒后的编辑不提醒
-              if cache.get(send_cache_key) and (event.message.edit_date - event.message.date) > datetime.timedelta(seconds=2): 
-                logger.error(f'{channel_msg_url} repeat send. deny!')
-                continue
-            if not l_chat_id:# 未记录频道id
-              logger.info(f'update user_subscribe_list.chat_id:{event.chat_id}  where id = {l_id} ')
-              re_update = utils.db.user_subscribe_list.update(chat_id = str(event.chat_id) ).where(utils.User_subscribe_list.id == l_id)
-              re_update.execute()
-            
-            chat_title = event.chat.username if event.chat.username else event.chat.title
-            sender = await message.get_sender()
-
             if is_regex_str(keywords):# 输入为正则字符串
               regex_match = js_to_py_re(keywords)(text)# 进行正则匹配 只支持ig两个flag
               if isinstance(regex_match,regex.Match):#search()结果
                 regex_match = [regex_match.group()]
-              regex_match_str = []# 显示内容
-              for _ in regex_match:
-                item = ''.join(_) if isinstance(_,tuple) else _
-                if item:
-                  regex_match_str.append(item) # 合并处理掉空格
-              regex_match_str = list(set(regex_match_str))# 处理重复元素
-              if regex_match_str:# 默认 findall()结果
-                message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in {chat_title} @{sender.username}'
-                if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
-                  logger.info(f'REGEX: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
-                  if isinstance(event,events.NewMessage.Event):# 新建事件
-                    cache.set(send_cache_key,1,expire=86400) # 发送标记缓存一天
+                regex_match_str = []# 显示内容
+                for _ in regex_match:
+                  item = ''.join(_) if isinstance(_,tuple) else _
+                  if item:
+                    regex_match_str.append(item) # 合并处理掉空格
+                regex_match_str = list(set(regex_match_str))# 处理重复元素
+                if regex_match_str:# 默认 findall()结果
+                  message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in {chat_title} @{sender.username}'
                   await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
-                else:
-                  # 已发送该消息
-                  logger.debug(f'REGEX send repeat. rule_name:{config["msg_unique_rule"]}  {CACHE_KEY_UNIQUE_SEND}:{channel_msg_url}')
-                  continue
-
+                  raise events.StopPropagation
               else:
                 logger.debug(f'regex_match empty. regex:{keywords} ,message: t.me/{event.chat.username}/{event.message.id}')
             else:#普通模式
               if keywords in text:
                 message_str = f'[#FOUND]({channel_msg_url}) **{keywords}** in {chat_title} @{sender.username}'
-                if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
-                  logger.info(f'TEXT: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
-                  if isinstance(event,events.NewMessage.Event):# 新建事件
-                    cache.set(send_cache_key,1,expire=86400) # 发送标记缓存一天
-                  await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
-                else:
-                  # 已发送该消息
-                  logger.debug(f'TEXT send repeat. rule_name:{config["msg_unique_rule"]}  {CACHE_KEY_UNIQUE_SEND}:{channel_msg_url}')
-                  continue
+                await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
+                raise events.StopPropagation
+                
           except errors.rpcerrorlist.UserIsBlockedError  as _e:
             # User is blocked (caused by SendMessageRequest)  用户已手动停止bot
             logger.error(f'{_e}')
@@ -157,22 +119,12 @@ where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create
           except ValueError  as _e:
             # 用户从未使用bot
             logger.error(f'{_e}')
-            # 删除用户订阅和id
-            isdel = utils.db.user.delete().where(utils.User.chat_id == receiver).execute()
-            user_id = utils.db.user.get_or_none(chat_id=receiver)
-            if user_id:
-              isdel2 = utils.db.user_subscribe_list.delete().where(utils.User_subscribe_list.user_id == user_id.id).execute()
           except AssertionError as _e:
             raise _e
           except Exception as _e:
             logger.error(f'{_e}')
       else:
         logger.debug(f'sql find empty. event.chat.username:{event.chat.username}, find:{find}, sql:{sql}')
-
-        if 'auto_leave_channel' in config and config['auto_leave_channel']:
-          if event.chat.username:# 公开频道/组
-            logger.info(f'Leave  Channel/group: {event.chat.username}')
-            await leave_channel(event.chat.username)
 
 
 def js_to_py_re(rx):
