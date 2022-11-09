@@ -48,9 +48,9 @@ class User_subscribe_list(_Base):
   """
   用户订阅表
   user_subscribe_list
-  id user_id channel_name keywords status create_time
+  id channel_name keywords status create_time
   """
-  user_id = IntegerField(index=True)
+  id = IntegerField(index=True)
   channel_name = CharField(50,null=False)# 频道名称
   
   # https://docs.telethon.dev/en/latest/concepts/chats-vs-channels.html#channels
