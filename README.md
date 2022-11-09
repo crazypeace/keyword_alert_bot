@@ -29,7 +29,10 @@ bot的username
 获得压缩包地址
 
 ![image](https://user-images.githubusercontent.com/665889/183339082-e409da96-6dfe-46e4-a592-9c434ebfd0bd.png)
-
+```
+apt update
+apt install -y wget unzip
+```
 ```
 cd /etc/
 wget https://github.com/crazypeace/keyword_alert_bot/archive/refs/heads/master.zip
