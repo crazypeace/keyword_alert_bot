@@ -300,7 +300,11 @@ async def start(event):
 async def add_keyword(event):
   """Send a message when the command /add_keyword is issued."""
   # 检查使用者的telegram ID
-  await check_user_id(event.message.chat.id)  
+  find = utils.db.user.get_or_none(chat_id=event.message.chat.id)
+  if not find:# 不存在用户信息
+    await event.respond('Failed. Please input /start')
+    raise events.StopPropagation  
+  
   text = event.message.text
   text = text.replace('，',',')# 替换掉中文逗号
   text = regex.sub('\s*,\s*',',',text) # 确保英文逗号间隔中间都没有空格  如 "https://t.me/xiaobaiup, https://t.me/com9ji"
@@ -325,13 +329,6 @@ async def add_keyword(event):
         for text, entities in telethon_utils.split_text(text, entities):
           await event.respond(text,formatting_entities=entities) 
   raise events.StopPropagation
-
-
-def check_user_id(user_id)
-  find = utils.db.user.get_or_none(chat_id=user_id)
-  if not find:# 不存在用户信息
-    await event.respond('Failed. Please input /start')
-    raise events.StopPropagation
 
 
 def add_keywordlist(keywords_list):
@@ -362,7 +359,11 @@ def add_keywordlist(keywords_list):
 async def del_keyword(event):
   """Send a message when the command /del_keyword is issued."""
   # 检查使用者的telegram ID
-  await check_user_id(event.message.chat.id)  
+  find = utils.db.user.get_or_none(chat_id=event.message.chat.id)
+  if not find:# 不存在用户信息
+    await event.respond('Failed. Please input /start')
+    raise events.StopPropagation 
+
   text = event.message.text
   text = text.replace('，',',')# 替换掉中文逗号
   text = regex.sub('\s*,\s*',',',text) # 确保英文逗号间隔中间都没有空格  如 "https://t.me/xiaobaiup, https://t.me/com9ji"
@@ -407,7 +408,11 @@ async def del_id(event):
   根据id取消关键字订阅
   '''
   # 检查使用者的telegram ID
-  await check_user_id(event.message.chat.id)  
+  find = utils.db.user.get_or_none(chat_id=event.message.chat.id)
+  if not find:# 不存在用户信息
+    await event.respond('Failed. Please input /start')
+    raise events.StopPropagation 
+
   text = event.message.text
   text = text.replace('，',',')# 替换掉中文逗号
   text = regex.sub('\s*,\s*',',',text) # 确保英文逗号间隔中间都没有空格  如 "https://t.me/xiaobaiup, https://t.me/com9ji"
@@ -457,26 +462,29 @@ async def delete_all(event):
   isdel = utils.db.user_subscribe_list.delete().execute()
   await event.respond('delete_all successfully')
   raise events.StopPropagation
-  return result  
+
 
 
 # 查询当前所有订阅
 @bot.on(events.NewMessage(pattern='/list'))
 async def _list(event):
   # 检查使用者的telegram ID
-  await check_user_id(event.message.chat.id)  
+  find = utils.db.user.get_or_none(chat_id=event.message.chat.id)
+  if not find:# 不存在用户信息
+    await event.respond('Failed. Please input /start')
+    raise events.StopPropagation  
 
   find = utils.db.connect.execute_sql('select id,keywords from user_subscribe_list').fetchall()
-    if find:
-      msg = ''
-      for id,keywords in find:
-        msg += f'{keywords}\n'
-        text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
-        for text, entities in telethon_utils.split_text(text, entities):
-          # await client.send_message(chat, text, formatting_entities=entities)
-          await event.respond(text,formatting_entities=entities) 
-    else:
-      await event.respond('not found list')
+  if find:
+    msg = ''
+    for id,keywords in find:
+      msg += f'{keywords}\n'
+      text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
+      for text, entities in telethon_utils.split_text(text, entities):
+        # await client.send_message(chat, text, formatting_entities=entities)
+        await event.respond(text,formatting_entities=entities) 
+  else:
+    await event.respond('not found list')
   raise events.StopPropagation
 
 
