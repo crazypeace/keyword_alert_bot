@@ -33,7 +33,7 @@ client.start(phone=account['phone'])
 # client.start()
 
 # 设置bot，且直接启动
-bot = TelegramClient('.{}'.format(account['bot_name']), account['api_id'], account['api_hash'],proxy = proxy).start(bot_token=account['bot_token'])
+bot = TelegramClient('.{}'.format(account['bot_username']), account['api_id'], account['api_hash'],proxy = proxy).start(bot_token=account['bot_token'])
 
 def js_to_py_re(rx):
   '''
