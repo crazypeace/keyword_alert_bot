@@ -25,20 +25,6 @@ bot的username
 
 ## 2. 运行环境
 
-### 从GitHub拉程序文件
-获得压缩包地址
-
-![image](https://user-images.githubusercontent.com/665889/183339082-e409da96-6dfe-46e4-a592-9c434ebfd0bd.png)
-```
-apt update
-apt install -y wget unzip
-```
-```
-cd 
-wget https://github.com/crazypeace/keyword_alert_bot/archive/refs/heads/master.zip
-unzip master.zip
-cd keyword_alert_bot-master/
-```
 ### 准备python相关组件
 基于Debian 11 环境
 ```
@@ -46,6 +32,19 @@ apt update
 apt install -y pip 
 pip install telethon peewee PySocks diskcache PyYAML asyncstdlib
 ```
+
+### 从GitHub拉程序文件
+获得压缩包地址
+
+![image](https://user-images.githubusercontent.com/665889/183339082-e409da96-6dfe-46e4-a592-9c434ebfd0bd.png)
+
+```
+cd 
+wget https://github.com/crazypeace/keyword_alert_bot/archive/refs/heads/master.zip
+unzip master.zip
+cd keyword_alert_bot-master/
+```
+
 ## 3. 配置文件config.yml
 
 修改如下字段
