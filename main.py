@@ -118,10 +118,10 @@ async def resolve_invit_hash(invit_hash,expired_secends = 60 * 5):
   cache_key = f'01211resolve_invit_hash{invit_hash}'
   find = await cache_get(cache_key)
   if find: 
-    logger.info(f'resolve_invit_hash HIT CACHE: {invit_hash}')
+    logger.debug(f'resolve_invit_hash HIT CACHE: {invit_hash}')
     return find
     
-  logger.info(f'resolve_invit_hash MISS: {invit_hash}')
+  logger.debug(f'resolve_invit_hash MISS: {invit_hash}')
   chatinvite = await client(CheckChatInviteRequest(invit_hash))
   if chatinvite and hasattr(chatinvite,'chat'):# 已加入
     # chatinvite.chat.id # 1695903641
@@ -146,9 +146,9 @@ async def on_greeting(event):
     if not event.chat:
       logger.error(f'event.chat empty. event: { event }')
       raise events.StopPropagation
-    
+
     if not hasattr(event.chat,'username'):
-      logger.error(f'event.chat not found username:{event.chat}')
+      logger.warning(f'event.chat not found username:{event.chat}')
       raise events.StopPropagation
 
     if event.chat.username == account['bot_username']: # 不监听当前机器人消息
@@ -199,7 +199,7 @@ where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create
       """
       find = utils.db.connect.execute_sql(sql,(event.chat.username,str(event.chat_id))).fetchall()
       if find:
-        logger.info(f'channel: {event.chat.username}; all chat_id & keywords:{find}') # 打印当前频道，订阅的用户以及关键字
+        logger.debug(f'channel: {event.chat.username}; all chat_id & keywords:{find}') # 打印当前频道，订阅的用户以及关键字
 
         for receiver,keywords,l_id,l_chat_id in find:
           try:
@@ -221,10 +221,10 @@ where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create
             if isinstance(event,events.MessageEdited.Event):# 编辑事件
               # 24小时内新建2秒后的编辑不提醒
               if cache.get(send_cache_key) and (event.message.edit_date - event.message.date) > datetime.timedelta(seconds=2): 
-                logger.error(f'{channel_msg_url} repeat send. deny!')
+                logger.debug(f'{channel_msg_url} repeat send. deny!')
                 continue
             if not l_chat_id:# 未记录频道id
-              logger.info(f'update user_subscribe_list.chat_id:{event.chat_id}  where id = {l_id} ')
+              logger.debug(f'update user_subscribe_list.chat_id:{event.chat_id}  where id = {l_id} ')
               re_update = utils.db.user_subscribe_list.update(chat_id = str(event.chat_id) ).where(utils.User_subscribe_list.id == l_id)
               re_update.execute()
             
@@ -244,7 +244,7 @@ where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create
               if regex_match_str:# 默认 findall()结果
                 message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in {chat_title} @{sender.username}'
                 if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
-                  logger.info(f'REGEX: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
+                  logger.debug(f'REGEX: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
                   if isinstance(event,events.NewMessage.Event):# 新建事件
                     cache.set(send_cache_key,1,expire=86400) # 发送标记缓存一天
                   await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
@@ -259,7 +259,7 @@ where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create
               if keywords in text:
                 message_str = f'[#FOUND]({channel_msg_url}) **{keywords}** in {chat_title} @{sender.username}'
                 if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
-                  logger.info(f'TEXT: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
+                  logger.debug(f'TEXT: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
                   if isinstance(event,events.NewMessage.Event):# 新建事件
                     cache.set(send_cache_key,1,expire=86400) # 发送标记缓存一天
                   await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
@@ -406,7 +406,7 @@ async def join_channel_insert_subscribe(user_id,keyword_channel_list):
       if channel_entity and hasattr(channel_entity,'username'): username = channel_entity.username
       
       if channel_entity and not channel_entity.left: # 已加入该频道
-        logger.warning(f'user_id：{user_id}触发检查  已加入该私有频道:{chat_id}  invite_hash:{c}')
+        logger.debug(f'user_id：{user_id}触发检查  已加入该私有频道:{chat_id}  invite_hash:{c}')
         res.append((k,username,chat_id))
       else:
         if is_chat_invite_link:
@@ -418,6 +418,7 @@ async def join_channel_insert_subscribe(user_id,keyword_channel_list):
             chat_id,chat_title,channel_entity = chatinvite
             res.append((k,username,chat_id))
         else:
+          logger.info(f'user_id：{user_id}加入频道{c}')
           await client(JoinChannelRequest(channel_entity or chat_id))
           res.append((k,username,chat_id))
         
@@ -487,6 +488,7 @@ async def leave_channel(channel_name):
       await client(DeleteHistoryRequest(channel_name))
       logger.info(f'退出 {channel_name}')
   except Exception as _e: # 不存在的频道
+      logger.error(f'无法退出：{channel_name}, {_e}')
       return f'无法退出该频道：{channel_name}, {_e}'
       
 
@@ -788,7 +790,7 @@ async def _list(event):
               if channel_entity.username != channel_name:
                 channel_name += '\t[CHANNEL NAME EXPIRED]'# 标记频道名称过期
                 # channel_name = '' # 不显示
-                logger.info(f'channel username:{channel_name} expired.')
+                logger.debug(f'channel username:{channel_name} expired.')
             else:
               channel_name += '\t[CHANNEL NONE EXPIRED]'# 标记频道名称过期.当前不存在
               # channel_name = '' # 不显示
@@ -796,7 +798,7 @@ async def _list(event):
         elif chat_id:# 只有chat_id
           if channel_entity and channel_entity.username:
             channel_name = channel_entity.username
-            logger.info(f'channel chat_id:{chat_id} username:{channel_name}')
+            logger.debug(f'channel chat_id:{chat_id} username:{channel_name}')
 
         channel_username = ''
         if channel_entity:# 有实体信息才显示频道名
