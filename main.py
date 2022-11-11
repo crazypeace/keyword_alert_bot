@@ -27,7 +27,6 @@ if all(config['proxy'].values()): # 同时不为None
 # proxy = (socks.SOCKS5, '127.0.0.1', 1088)
 
 account = config['account']
-account['bot_name'] = account.get('bot_name') or account['bot_username']
 cache = diskcache.Cache(current_path+'/.tmp')# 设置缓存文件目录  当前tmp文件夹。用于缓存分步执行命令的操作，避免bot无法找到当前输入操作的进度
 client = TelegramClient('{}/.{}_tg_login'.format(current_path,account['username']), account['api_id'], account['api_hash'], proxy = proxy)
 client.start(phone=account['phone'])
@@ -148,11 +147,11 @@ async def on_greeting(event):
       logger.error(f'event.chat empty. event: { event }')
       raise events.StopPropagation
     
-    #if not hasattr(event.chat,'username'):
-    #  logger.error(f'event.chat not found username:{event.chat}')
-    #  raise events.StopPropagation
+    if not hasattr(event.chat,'username'):
+      logger.error(f'event.chat not found username:{event.chat}')
+      raise events.StopPropagation
 
-    if event.chat.username == account['bot_name']: # 不监听当前机器人消息
+    if event.chat.username == account['bot_username']: # 不监听当前机器人消息
       logger.debug(f'不监听当前机器人消息, event.chat.username: { event.chat.username }')
       raise events.StopPropagation
 
@@ -580,7 +579,6 @@ async def subscribe(event):
         text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
         for text, entities in telethon_utils.split_text(text, entities):
           await event.respond(text,formatting_entities=entities) 
-        #await event.respond('success subscribe:\n'+msg,parse_mode = None)
   raise events.StopPropagation
 
 
@@ -857,7 +855,6 @@ async def common(event):
             channel = f'<a href="t.me/c/{_chat_id}/-1">{_chat_id}</a>'
           msg += f'keyword:{key}  channel:{channel}\n'
         if msg:
-          # await event.respond('success subscribe:\n'+msg,parse_mode = None)
           msg = 'success subscribe:\n'+msg 
           text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
           for text, entities in telethon_utils.split_text(text, entities):
