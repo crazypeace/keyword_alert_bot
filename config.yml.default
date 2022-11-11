@@ -15,7 +15,7 @@ account:
 # LOG
 logger:
   path: null # /root/absolute-path/   default null: _current_path
-  level: WARN # FATAL,ERROR,WARN,INFO,DEBUG,NOTSET
+  level: INFO # FATAL,ERROR,WARN,INFO,DEBUG,NOTSET
 
 # 代理
 proxy:
