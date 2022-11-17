@@ -17,6 +17,8 @@ config.yaml 不考虑旧版本的配置文件兼容性问题
 
 ![image](https://user-images.githubusercontent.com/665889/202410665-68ebbc74-ed29-47cc-9060-b03f86390c25.png)
 
+![image](https://user-images.githubusercontent.com/665889/202412458-717e0601-ff61-42c0-9adb-e0912ec7e5e1.png)
+
 
 # 写给新手的搭建指南
 ## 1. 账户
