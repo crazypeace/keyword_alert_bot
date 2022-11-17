@@ -235,11 +235,11 @@ where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create
               regex_match = js_to_py_re(keywords)(text)# 进行正则匹配 只支持ig两个flag
               if isinstance(regex_match,regex.Match):#search()结果
                 regex_match = [regex_match.group()]
-              regex_match_str = []# 显示内容
-              for _ in regex_match:
-                item = ''.join(_) if isinstance(_,tuple) else _
-                if item:
-                  regex_match_str.append(item) # 合并处理掉空格
+                regex_match_str = []# 显示内容
+                for _ in regex_match:
+                  item = ''.join(_) if isinstance(_,tuple) else _
+                  if item:
+                    regex_match_str.append(item) # 合并处理掉空格
               regex_match_str = list(set(regex_match_str))# 处理重复元素
               if regex_match_str:# 默认 findall()结果
                 message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in {chat_title} @{sender.username}'
