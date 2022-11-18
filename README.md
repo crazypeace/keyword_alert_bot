@@ -58,7 +58,7 @@ pip install telethon peewee PySocks diskcache PyYAML asyncstdlib
 
 ```
 cd 
-wget https://github.com/crazypeace/keyword_alert_bot/archive/refs/heads/master.zip
+wget -N https://github.com/crazypeace/keyword_alert_bot/archive/refs/heads/master.zip
 unzip master.zip
 cd keyword_alert_bot-master/
 ```
