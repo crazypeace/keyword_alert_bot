@@ -4,10 +4,6 @@ https://github.com/Hootrix/keyword_alert_bot/issues/29 信息显示为一行
 
 ![image](https://user-images.githubusercontent.com/665889/202410324-6b9b696f-27b0-4730-9491-6508fa30b89a.png)
 
-https://github.com/Hootrix/keyword_alert_bot/issues/45 代码逻辑微调
-
-![image](https://user-images.githubusercontent.com/665889/202410975-9979e448-d79d-4e17-a0ea-5376947a158e.png)
-
 信息显示末尾添加消息发送人的username 可以直接点击此用户名发起私聊
 
 ![image](https://user-images.githubusercontent.com/665889/202411657-e3e75f5d-3447-41cf-b021-a3a385c94d3b.png)
