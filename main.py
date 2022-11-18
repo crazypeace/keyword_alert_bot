@@ -256,7 +256,7 @@ where (l.channel_name = ? or l.chat_id = ?)  and l.status = 0  order by l.create
               else:
                 logger.debug(f'regex_match empty. regex:{keywords} ,message: t.me/{event.chat.username}/{event.message.id}')
             else:#普通模式
-              if keywords in text:
+              if keywords.lower() in text.lower():
                 message_str = f'[#FOUND]({channel_msg_url}) **{keywords}** in {chat_title} @{sender.username}'
                 if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
                   logger.debug(f'TEXT: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
@@ -683,61 +683,28 @@ async def unsubscribe(event):
 @bot.on(events.NewMessage(pattern='/help'))
 async def start(event):
   await event.respond('''
-
 目的：根据关键字订阅频道消息，支持群组
-
 BUG反馈：https://git.io/JJ0Ey
-
 支持多关键字和多频道订阅，使用英文逗号`,`间隔
-
 关键字和频道之间使用空格间隔
 
 主要命令：
 
  - 订阅操作
-
   /subscribe  关键字1,关键字2 tianfutong,xiaobaiup
-
   /subscribe  关键字1,关键字2 https://t.me/tianfutong,https://t.me/xiaobaiup
 
  - 取消订阅
-
   /unsubscribe  关键字1,关键字2 https://t.me/tianfutong,https://t.me/xiaobaiup
 
  - 取消订阅id
-
   /unsubscribe_id  1,2
 
  - 取消所有订阅
-
   /unsubscribe_all
 
  - 显示所有订阅列表
-
   /list
-
----
-Purpose: Subscribe to channel messages based on keywords. Support groups
-
-BUG FEEDBACK: https://git.io/JJ0Ey
-
-Multi-keyword and multi-channel subscription support, using comma `,` interval.
-
-Use space between keywords and channels
-
-Main command:
-
-/subscribe  keyword1,keyword2 tianfutong,xiaobaiup
-/subscribe  keyword1,keyword2 https://t.me/tianfutong,https://t.me/xiaobaiup
-
-/unsubscribe  keyword1,keyword2 https://t.me/tianfutong,https://t.me/xiaobaiup
-
-/unsubscribe_id  1,2
-
-/unsubscribe_all
-
-/list
-
   ''')
   raise events.StopPropagation
 
