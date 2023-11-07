@@ -48,7 +48,7 @@ bot的username
 ```
 apt update
 apt install -y pip 
-pip install telethon peewee PySocks diskcache PyYAML asyncstdlib
+pip install telethon peewee PySocks diskcache PyYAML asyncstdlib colorama text_box_wrapper
 ```
 
 ### 从GitHub拉程序文件
