@@ -168,60 +168,6 @@ http://t.me/keyword_alert_bot
 
 ```
 
-
-
-## BUILD
-
-### 1. config.yml.default --> config.yml
-
-#### Create Telelgram Account & API
-
-[开通api](https://my.telegram.org/apps) 建议请使用新注册的Telegram账户
-
-#### Create BOT 
-
-https://t.me/BotFather  
-
-### 2. RUN
-
-运行环境 python3.7+
-
-首次运行需要用tg账户接收数字验证码，且输入密码（telegram API触发）
-
-```
-$ pipenv install
-
-$ pipenv shell
-
-$ python3 ./main.py
-```
-
-### 3. crontab （optional）
-
- - update telethon
-
-依赖库telethon可能会有旧版本不可用的情况或者其他BUG，请最好是通过定时任务去执行依赖更新。
-
-e.g. 
-```
-0 0 1 * * cd /home/keyword_alert_bot && pipenv update telethon > /dev/null 2>&1
-```
-
-## BUG Q&A
-
- - 查看日志发现个别群组无法接收消息，软件客户端正常接收
- 
- 请尝试更新telethon解决问题🤔，我也很无助。
-
- - 订阅群组消息，机器人没任何反应
- https://github.com/Hootrix/keyword_alert_bot/issues/20
-
- - ModuleNotFoundError: No module named 'asyncstdlib', No module named '...'
-
-```
-$ pipenv  install
-```
-
 ## BOT HELP
 
 ```

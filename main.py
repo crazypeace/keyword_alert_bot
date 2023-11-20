@@ -253,10 +253,11 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
               re_update = utils.db.user_subscribe_list.update(chat_id = str(event.chat_id) ).where(utils.User_subscribe_list.id == l_id)
               re_update.execute()
             
-            # chat_title = event_chat.username or event_chat.title
-            chat_title = event.chat.username if event.chat.username else event.chat.title
+            # chat_title = event_chat_username or event.chat.title
+            chat_title = event.chat.title
+            chat_username = event_chat_username or "None"
+
             sender = await message.get_sender()
-            
             if is_regex_str(keywords):# 输入为正则字符串
               regex_match = js_to_py_re(keywords)(text)# 进行正则匹配 只支持ig两个flag
               if isinstance(regex_match,regex.Match):#search()结果
@@ -269,10 +270,10 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
               regex_match_str = list(set(regex_match_str))# 处理重复元素
               if regex_match_str:# 默认 findall()结果
                 # # {chat_title} \n\n
-                channel_title = f"\n\nCHANNEL: {chat_title}" if not event_chat_username else ""
-
+                # channel_title = f"\n\nCHANNEL: {chat_title}" if not event_chat_username else ""
                 # message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}**{channel_title}'
-                message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in {chat_title} @{sender.username}'
+                message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in **{chat_title}**(@{chat_username}) from {sender.first_name} {sender.last_name}(@{sender.username})'
+                message_str += f'\n{text}'
                 if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
                   logger.info(f'REGEX: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
                   if isinstance(event,events.NewMessage.Event):# 新建事件
@@ -281,8 +282,11 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
                   # 黑名单检查
                   if is_msg_block(receiver=receiver,msg=message.text,channel_name=event_chat_username,channel_id=event.chat_id):
                     continue
-                  
-                  await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
+                  ####
+                  # await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
+                  ####
+                  await bot.send_message(int(config['report_id']), message_str,link_preview = True,parse_mode = 'markdown')
+
                 else:
                   # 已发送该消息
                   logger.debug(f'REGEX send repeat. rule_name:{config["msg_unique_rule"]}  {CACHE_KEY_UNIQUE_SEND}:{channel_msg_url}')
@@ -293,9 +297,10 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
             else:#普通模式
               if keywords in text:
                 # # {chat_title} \n\n
-                channel_title = f"\n\nCHANNEL: {chat_title}" if not event_chat_username else ""
+                # channel_title = f"\n\nCHANNEL: {chat_title}" if not event_chat_username else ""
                 # message_str = f'[#FOUND]({channel_msg_url}) **{keywords}**{channel_title}'
-                message_str = f'[#FOUND]({channel_msg_url}) **{keywords}** in {chat_title} @{sender.username}'
+                message_str = f'[#FOUND]({channel_msg_url}) **{keywords}** in **{chat_title}**(@{chat_username}) from {sender.first_name} {sender.last_name}(@{sender.username})'
+                message_str += f'\n{text}'
                 if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
                   logger.info(f'TEXT: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
                   if isinstance(event,events.NewMessage.Event):# 新建事件
@@ -304,8 +309,10 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
                   # 黑名单检查
                   if is_msg_block(receiver=receiver,msg=message.text,channel_name=event_chat_username,channel_id=event.chat_id):
                     continue
-
-                  await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
+                  ####
+                  # await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
+                  ####
+                  await bot.send_message(int(config['report_id']), message_str,link_preview = True,parse_mode = 'markdown')
                 else:
                   # 已发送该消息
                   logger.debug(f'TEXT send repeat. rule_name:{config["msg_unique_rule"]}  {CACHE_KEY_UNIQUE_SEND}:{channel_msg_url}')
@@ -887,8 +894,8 @@ async def _list(event):
           if channel_name:
             channel_username = f'channel username: {channel_name}\n'
 
-        channel_url = f'<a href="{channel_url}-1">{"https://t.me/"+channel_name if channel_name else channel_url}</a>'
-        msg += f'id:{sub_id}\n{_type}: {keywords}\n{channel_title}{channel_username}channel url: {channel_url}\n---\n'
+        channel_url = f'<a href="{channel_url}">{"https://t.me/"+channel_name if channel_name else channel_url}</a>'
+        msg += f'id:{sub_id}\n{_type}: {keywords}\n{channel_title}{channel_username}channel: {channel_url}\n---\n'
       
       text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
       for text, entities in telethon_utils.split_text(text, entities):

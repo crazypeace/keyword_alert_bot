@@ -1,8 +1,6 @@
-#账户配置描述信息
-
-# Config BOT and account
+# 账户配置描述信息
 account: 
-  # 监听频道信息的账户
+  # 监听频道信息的TG用户
   api_id : '1400003'
   api_hash : 'd11xxxxx112a7e059e831'
   phone : '+86190000010'
@@ -10,11 +8,14 @@ account:
 
   # 发送消息的bot token
   bot_token : '1000007:AAHNh8axxxxxxxxxxxxxxxxHA'
-  bot_username : 'keyxxxxxrt_bot' 
+  bot_username : 'keyxxxxxrt_bot' # 同参数 bot_name
+
+# 接收通知的ID
+report_id : '-1001234567789'
 
 # LOG
 logger:
-  path: null # /root/absolute-path/   default null: _current_path
+  path: null # e.g. /root/absolute-path/   default null: {_current_path}/logs/
   level: INFO # FATAL,ERROR,WARN,INFO,DEBUG,NOTSET
 
 # 代理
@@ -34,7 +35,7 @@ auto_leave_channel: false
 msg_unique_rule: SUBSCRIBE_ID # default SUBSCRIBE_ID
 
 # 非公共服务
-# 此bot只为指定的用户服务
+# 此bot只接收指定用户的命令
 private_service: false
 authorized_users: 
   - 123456789
