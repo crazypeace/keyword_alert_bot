@@ -627,7 +627,7 @@ async def subscribe(event):
           _chat_id, peer_type = telethon_utils.resolve_id(int(_chat_id))
 
         if not channel:
-          channel = f'<a href="t.me/c/{_chat_id}/-1">{_chat_id}</a>'
+          channel = f'<a href="t.me/c/{_chat_id}/">{_chat_id}</a>'
         msg += f'keyword:{key}  channel:{channel}\n'
       if msg:
         msg = 'success subscribe:\n'+msg 
@@ -943,7 +943,7 @@ async def common(event):
             _chat_id, peer_type = telethon_utils.resolve_id(int(_chat_id))
           
           if not channel:
-            channel = f'<a href="t.me/c/{_chat_id}/-1">{_chat_id}</a>'
+            channel = f'<a href="t.me/c/{_chat_id}/">{_chat_id}</a>'
           msg += f'keyword:{key}  channel:{channel}\n'
         if msg:
           # await event.respond('success subscribe:\n'+msg,parse_mode = None)

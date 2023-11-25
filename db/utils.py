@@ -35,12 +35,12 @@ class User(_Base):
   chat_id = IntegerField(index=True,unique=True)
   create_time = DateTimeField('%Y-%m-%d %H:%M:%S',index=True)
 
-  class Meta:
-        indexes = (
-          #  (('字段1', '字段2'), True),    # 字段1与字段2整体作为索引，True 代表唯一索引
-          # (('字段1', '字段2'), False),   # 字段1与字段2整体作为索引，False 代表普通索引
-            # (('price','type','time'), False), # 联合索引
-        )
+class Meta:
+      indexes = (
+        #  (('字段1', '字段2'), True),    # 字段1与字段2整体作为索引，True 代表唯一索引
+        # (('字段1', '字段2'), False),   # 字段1与字段2整体作为索引，False 代表普通索引
+        # (('price','type','time'), False), # 联合索引
+      )
 
 class User_subscribe_list(_Base):
   """
