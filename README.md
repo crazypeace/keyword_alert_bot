@@ -1,3 +1,6 @@
+# 运行效果
+https://www.youtube.com/watch?v=lVUe-dyMek
+
 # 在原版基础上的修改
 
 https://github.com/Hootrix/keyword_alert_bot/issues/29 信息显示为一行
