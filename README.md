@@ -112,6 +112,9 @@ crontab -e
 
 意思是每次重启后，等待120秒，再执行后面那句shell命令
 
+<details>
+    <summary>原项目readme (点击展开)</summary>
+  
 # 🤖Telegram keyword alert bot ⏰
 
 
@@ -209,3 +212,4 @@ Main command:
 
 /list - displays a list of all subscriptions
 ```
+</details>
