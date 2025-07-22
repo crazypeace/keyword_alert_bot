@@ -4,7 +4,6 @@ account:
   api_id : '1400003'
   api_hash : 'd11xxxxx112a7e059e831'
   phone : '+86190000010'
-  username : 'cliasaxxxev'
 
   # 发送消息的bot token
   bot_token : '1000007:AAHNh8axxxxxxxxxxxxxxxxHA'
