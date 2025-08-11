@@ -1,0 +1,8 @@
+telethon
+peewee
+PySocks
+diskcache
+PyYAML
+asyncstdlib
+colorama
+text_box_wrapper
