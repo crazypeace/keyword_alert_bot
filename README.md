@@ -1,3 +1,13 @@
+# 做了新项目
+针对个人使用, 轻量化.
+
+没有数据库, 关键字列表放在配置文件里.
+
+项目地址  
+https://github.com/crazypeace/tg-keyword-monitor-bot
+
+<details>
+    <summary>原项目readme (点击展开)</summary>
 # 运行效果
 https://www.youtube.com/watch?v=lVUe-dyMek
 
@@ -112,8 +122,10 @@ crontab -e
 
 意思是每次重启后，等待120秒，再执行后面那句shell命令
 
+</details>
+    
 <details>
-    <summary>原项目readme (点击展开)</summary>
+    <summary>源项目readme (点击展开)</summary>
   
 # 🤖Telegram keyword alert bot ⏰
 
