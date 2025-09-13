@@ -1,4 +1,5 @@
 #coding=utf-8
+from math import log
 from telethon import TelegramClient, events, sync, errors
 from db import utils
 import socks,os,datetime
@@ -14,11 +15,13 @@ from telethon.tl.functions.channels import LeaveChannelRequest, DeleteChannelReq
 from logger import logger
 from config import config,_current_path as current_path
 from telethon import utils as telethon_utils
-from telethon.tl.types import PeerChannel
+from telethon.tl.types import PeerChannel, PeerChat, PeerUser
+from telethon.utils import get_display_name, get_peer_id, resolve_id
 from telethon.extensions import markdown,html
 from asyncstdlib.functools import lru_cache as async_lru_cache
 import asyncio
-from utils.common import is_allow_access,banner,is_msg_block,get_event_chat_username,get_event_chat_username_list
+from utils.common import is_allow_source, is_allow_access, banner, is_msg_block, get_event_chat_username, get_event_chat_username_list, get_event_chat_username_real
+import traceback
 
 # 配置访问tg服务器的代理
 proxy = None
@@ -28,15 +31,15 @@ if all(config['proxy'].values()): # 同时不为None
 # proxy = (socks.SOCKS5, '127.0.0.1', 1088)
 
 account = config['account']
-account['bot_name'] = account.get('bot_name') or account['bot_username']
+account['bot_username'] = account.get('bot_username') or account.get('bot_name')
 tmp_path = f'{current_path}/.tmp/'
 cache = diskcache.Cache(tmp_path)# 设置缓存文件目录  当前tmp文件夹。用于缓存分步执行命令的操作，避免bot无法找到当前输入操作的进度
 client = TelegramClient(f'{tmp_path}/.{account["username"]}_tg_login', account['api_id'], account['api_hash'], proxy = proxy)
-client.start(phone=account['phone'])
-# client.start()
+# client.start(phone=account['phone'])
+client.start()
 
 # 设置bot，且直接启动
-bot = TelegramClient(f'{tmp_path}/.{account["bot_name"]}', account['api_id'], account['api_hash'],proxy = proxy).start(bot_token=account['bot_token'])
+bot = TelegramClient(f'{tmp_path}/.{account["bot_username"]}', account['api_id'], account['api_hash'],proxy = proxy).start(bot_token=account['bot_token'])
 
 def js_to_py_re(rx):
   '''
@@ -121,17 +124,14 @@ async def resolve_invit_hash(invit_hash,expired_secends = 60 * 5):
   cache_key = f'01211resolve_invit_hash{invit_hash}'
   find = await cache_get(cache_key)
   if find: 
-    logger.info(f'resolve_invit_hash HIT CACHE: {invit_hash}')
+    logger.debug(f'resolve_invit_hash HIT CACHE: {invit_hash}')
     return find
     
-  logger.info(f'resolve_invit_hash MISS: {invit_hash}')
+  logger.debug(f'resolve_invit_hash MISS: {invit_hash}')
   chatinvite = await client(CheckChatInviteRequest(invit_hash))
   if chatinvite and hasattr(chatinvite,'chat'):# 已加入
-    # chatinvite.chat.id # 1695903641
-    # chatinvite.chat.title # '测试'
-
     marked_id  = telethon_utils.get_peer_id(PeerChannel(chatinvite.chat.id)) # 转换为marked_id 
-    chat_title = chatinvite.chat.title
+    chat_title = chatinvite.chat.title or "None"
     channel_entity = chatinvite.chat
     rel = (marked_id,chat_title,channel_entity)
     await cache_set(cache_key,rel,expired_secends)
@@ -146,8 +146,24 @@ async def on_greeting(event):
     '''Greets someone'''
     # telethon.events.newmessage.NewMessage.Event
     # telethon.events.messageedited.MessageEdited.Event
+
+    chat_id = None
+    if hasattr(event.message, "chat"):
+      if hasattr(event.message.chat, "id"):
+        chat_id = event.message.chat.id
+    if not chat_id:
+      raise events.StopPropagation
+
+    # 如果数据来自于屏蔽列表
+    if not is_allow_source (chat_id):
+      raise events.StopPropagation
+
+    if (config['report_id'] == chat_id):
+      # 说明采集到了用于bot输出结果的群组/频道
+      raise events.StopPropagation
+        
     if not event.chat: # 私有群组出现None
-      channel_entity = await client_get_entity(event.chat_id,None)
+      channel_entity = await client_get_entity(chat_id,None)
       if channel_entity:
         event_chat = channel_entity
         setattr(event_chat,'username','')
@@ -160,24 +176,36 @@ async def on_greeting(event):
     if not hasattr(event_chat,'username'):
       logger.error(f'event_chat not found username:{event_chat}')
       raise events.StopPropagation
+    
+    if hasattr(event.chat, "username"):
+      if (event.chat.username == account['bot_username']): 
+        logger.debug(f'不监听当前机器人消息, event.chat.username: { event.chat.username }')
+        raise events.StopPropagation
 
-    if event_chat.username == account['bot_name']: # 不监听当前机器人消息
-      logger.debug(f'不监听当前机器人消息, event_chat.username: { event_chat.username }')
-      raise events.StopPropagation
+    if hasattr(event.message, "sender"):
+      if hasattr(event.message.sender, "username"):
+        if (event.message.sender.username == account['bot_username']): 
+          logger.debug(f'不监听当前机器人消息, event.message.sender.username: { event.message.sender.username }')
+          raise events.StopPropagation
+        if ('block_bot_msg' in config) and config['block_bot_msg'] and f'{event.message.sender.username}'.lower().endswith("bot"): 
+          if event.message.sender.bot:
+            logger.debug(f'endswith(bot)不监听所有机器人消息, event.message.sender.username: { event.message.sender.username }')
+            raise events.StopPropagation
 
     # 是否拒绝来自其它机器人发在群里的消息
-    if 'block_bot_msg' in config and config['block_bot_msg']:
-      if hasattr(event.message.sender,'bot') and event.message.sender.bot :
-        logger.debug(f'不监听所有机器人消息, event_chat.username: { event_chat.username }')
-        raise events.StopPropagation
-        
+    if ('block_bot_msg' in config) and config['block_bot_msg']:
+      if hasattr(event.message, "sender"):
+        if hasattr(event.message.sender, "bot"):
+          if event.message.sender.bot:
+            logger.debug(f'不监听所有机器人消息, event.message.sender.username: { event.message.sender.username }')
+            raise events.StopPropagation
+
     # if not event.is_group:# channel 类型
     if True:# 所有消息类型，支持群组
       message = event.message
 
       text = message.text
       if message.file and message.file.name:
-        # text += ' file:{}'.format(message.file.name)# 追加上文件名
         text += ' {}'.format(message.file.name)# 追加上文件名
 
       # 打印消息
@@ -203,6 +231,7 @@ async def on_greeting(event):
       # 查找当前频道的所有订阅
       event_chat_username_list = get_event_chat_username_list(event_chat)
       event_chat_username = get_event_chat_username(event_chat)
+      event_chat_username_real = get_event_chat_username_real(event_chat)
       placeholders = ','.join('?' for _ in event_chat_username_list)# 占位符填充
 
       condition_strs = ['l.chat_id = ?']
@@ -215,22 +244,22 @@ from user_subscribe_list as l
 INNER JOIN user as u on u.id = l.user_id 
 where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  desc
       """
-      
-      # bind = [str(event.chat_id)]
-      bind = [str(telethon_utils.get_peer_id(PeerChannel(event.chat_id)))] # 确保查询和入库的id单位统一 marked_id 
+
+      # bind = [str(telethon_utils.get_peer_id(PeerChannel(event.chat_id)))] # 确保查询和入库的id单位统一 marked_id       
+      bind = [chat_id]
       if event_chat_username_list:
         bind += event_chat_username_list
         
       find = utils.db.connect.execute_sql(sql,tuple(bind)).fetchall()
       if find:
-        logger.info(f'channel: {event_chat_username_list}; all chat_id & keywords:{find}') # 打印当前频道，订阅的用户以及关键字
+        logger.debug(f'channel: {event_chat_username_list}; all chat_id & keywords:{find}') # 打印当前频道，订阅的用户以及关键字
 
         for receiver,keywords,l_id,l_chat_id in find:
           try:
             # 消息发送去重规则
             MSG_UNIQUE_RULE_MAP = {
               'SUBSCRIBE_ID': f'{receiver}_{l_id}',
-              'MESSAGE_ID': f'{receiver}_{message.id}',
+              'MESSAGE_ID': f'{receiver}_{event_chat_username_real}_{message.id}',
             }
             if 'msg_unique_rule' not in config:
               config['msg_unique_rule'] = 'SUBSCRIBE_ID'
@@ -239,7 +268,7 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
             logger.debug(f'msg_unique_rule:{config["msg_unique_rule"]} --> {CACHE_KEY_UNIQUE_SEND}')
 
             # 优先返回可预览url
-            channel_url = f'https://t.me/{event_chat_username}/' if event_chat_username else get_channel_url(event_chat_username,event.chat_id)
+            channel_url = f'https://t.me/{event_chat_username_real}/' if event_chat_username_real else get_channel_url(event_chat_username_real,chat_id)
 
             channel_msg_url= f'{channel_url}{message.id}'
             send_cache_key = f'_LAST_{l_id}_{message.id}_send'
@@ -249,15 +278,20 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
                 logger.error(f'{channel_msg_url} repeat send. deny!')
                 continue
             if not l_chat_id:# 未记录频道id
-              logger.info(f'update user_subscribe_list.chat_id:{event.chat_id}  where id = {l_id} ')
+              logger.debug(f'update user_subscribe_list.chat_id:{event.chat_id}  where id = {l_id} ')
               re_update = utils.db.user_subscribe_list.update(chat_id = str(event.chat_id) ).where(utils.User_subscribe_list.id == l_id)
               re_update.execute()
             
-            # chat_title = event_chat_username or event.chat.title
-            chat_title = event.chat.title
-            chat_username = event_chat_username or "None"
+            chat_title = get_display_name(event.chat)
+            chat_username = event_chat_username_real or "None"
 
             sender = await message.get_sender()
+            sender_name = get_display_name(sender)
+            if sender is None:
+              sender_username = "None"
+            else:
+              sender_username = sender.username
+            
             if is_regex_str(keywords):# 输入为正则字符串
               regex_match = js_to_py_re(keywords)(text)# 进行正则匹配 只支持ig两个flag
               if isinstance(regex_match,regex.Match):#search()结果
@@ -269,50 +303,40 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
                   regex_match_str.append(item) # 合并处理掉空格
               regex_match_str = list(set(regex_match_str))# 处理重复元素
               if regex_match_str:# 默认 findall()结果
-                # # {chat_title} \n\n
-                # channel_title = f"\n\nCHANNEL: {chat_title}" if not event_chat_username else ""
-                # message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}**{channel_title}'
-                message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in **{chat_title}**(@{chat_username}) from {sender.first_name} {sender.last_name}(@{sender.username})'
-                message_str += f'\n{text}'
+                message_str = f'[#FOUND]({channel_msg_url}) **{regex_match_str}** in **{chat_title}**(@{chat_username}) from {sender_name}(@{sender_username})'
+                message_str += f'\n{text[:200]}'
                 if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
-                  logger.info(f'REGEX: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
+                  logger.debug(f'REGEX: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
                   if isinstance(event,events.NewMessage.Event):# 新建事件
                     cache.set(send_cache_key,1,expire=86400) # 发送标记缓存一天
                   
                   # 黑名单检查
                   if is_msg_block(receiver=receiver,msg=message.text,channel_name=event_chat_username,channel_id=event.chat_id):
                     continue
-                  ####
-                  # await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
-                  ####
-                  await bot.send_message(int(config['report_id']), message_str,link_preview = True,parse_mode = 'markdown')
 
+                  receiver = config['report_id']
+                  await bot.send_message(receiver, message_str,link_preview = False,parse_mode = 'markdown')
                 else:
                   # 已发送该消息
                   logger.debug(f'REGEX send repeat. rule_name:{config["msg_unique_rule"]}  {CACHE_KEY_UNIQUE_SEND}:{channel_msg_url}')
                   continue
-
-              else:
-                logger.debug(f'regex_match empty. regex:{keywords} ,message: t.me/{event_chat_username}/{event.message.id}')
+#              else:
+#                logger.debug(f'regex_match empty. regex:{keywords} ,message: t.me/{event_chat_username}/{event.message.id}')
             else:#普通模式
               if keywords in text:
-                # # {chat_title} \n\n
-                # channel_title = f"\n\nCHANNEL: {chat_title}" if not event_chat_username else ""
-                # message_str = f'[#FOUND]({channel_msg_url}) **{keywords}**{channel_title}'
-                message_str = f'[#FOUND]({channel_msg_url}) **{keywords}** in **{chat_title}**(@{chat_username}) from {sender.first_name} {sender.last_name}(@{sender.username})'
-                message_str += f'\n{text}'
+                message_str = f'[#FOUND]({channel_msg_url}) **{keywords}** in **{chat_title}**(@{chat_username}) from {sender_name}(@{sender_username})'
+                message_str += f'\n{text[:200]}'
                 if cache.add(CACHE_KEY_UNIQUE_SEND,1,expire=5):
-                  logger.info(f'TEXT: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
+                  logger.debug(f'TEXT: receiver chat_id:{receiver}, l_id:{l_id}, message_str:{message_str}')
                   if isinstance(event,events.NewMessage.Event):# 新建事件
                     cache.set(send_cache_key,1,expire=86400) # 发送标记缓存一天
 
                   # 黑名单检查
                   if is_msg_block(receiver=receiver,msg=message.text,channel_name=event_chat_username,channel_id=event.chat_id):
                     continue
-                  ####
-                  # await bot.send_message(receiver, message_str,link_preview = True,parse_mode = 'markdown')
-                  ####
-                  await bot.send_message(int(config['report_id']), message_str,link_preview = True,parse_mode = 'markdown')
+                  
+                  receiver = config['report_id']
+                  await bot.send_message(receiver, message_str, link_preview = False, parse_mode = 'markdown')
                 else:
                   # 已发送该消息
                   logger.debug(f'TEXT send repeat. rule_name:{config["msg_unique_rule"]}  {CACHE_KEY_UNIQUE_SEND}:{channel_msg_url}')
@@ -332,6 +356,13 @@ where ({' OR '.join(condition_strs)}) and l.status = 0  order by l.create_time  
           except AssertionError as _e:
             raise _e
           except Exception as _e:
+            # 获取异常的堆栈跟踪信息
+            traceback_info = traceback.extract_tb(_e.__traceback__)
+            
+            # 获取最后一帧的文件名和行号
+            filename, lineno, _, _ = traceback_info[-1]
+            
+            logger.error(f"异常发生在文件 {filename} 的第 {lineno} 行。")
             logger.error(f'{_e}')
       else:
         logger.debug(f'sql find empty. event.chat.username:{event_chat_username}, find:{find}, sql:{sql}')
@@ -364,7 +395,7 @@ def parse_url(url):
     del result['_params']
   return result
 
-def get_channel_url(event_chat_username,event_chat__id):
+def get_channel_url(event_chat_username,real_id):
   """
   获取频道/群组 url
   优先返回chat_id的url
@@ -380,8 +411,8 @@ def get_channel_url(event_chat_username,event_chat__id):
   # is_private = True if not event_chat_username else False
   host = 'https://t.me/'
   url = ''
-  if event_chat__id:
-    real_id, peer_type = telethon_utils.resolve_id(int(event_chat__id)) # 转换为官方真实id
+  if real_id:
+    # real_id, peer_type = telethon_utils.resolve_id(int(event_chat__id)) # 转换为官方真实id
     url = f'{host}c/{real_id}/'
   elif event_chat_username:
     url = f'{host}{event_chat_username}/'
@@ -430,8 +461,11 @@ async def join_channel_insert_subscribe(user_id,keyword_channel_list):
   res = []
   # 加入频道
   for k,c in keyword_channel_list:
-    username = ''
-    chat_id = ''
+    username = '142857142857'
+    chat_id = '142857142857'   
+    res.append((k,username,chat_id))    
+
+    """
     try:
       is_chat_invite_link = False
       if c.lstrip('-').isdigit():# 整数
@@ -471,7 +505,8 @@ async def join_channel_insert_subscribe(user_id,keyword_channel_list):
         else:
           await client(JoinChannelRequest(channel_entity or chat_id))
           res.append((k,username,chat_id))
-        
+    
+
     except errors.InviteHashExpiredError as _e:
       logger.error(f'{c} InviteHashExpiredError ERROR:{_e}')
       return f'无法使用该频道邀请链接：{c}\nLink has expired.'
@@ -495,7 +530,8 @@ async def join_channel_insert_subscribe(user_id,keyword_channel_list):
           return '无法使用该频道：{}\n\nChannel error, unable to use: {}'.format(c,_e)
       else:
         return '无法使用该频道：{}\n\nChannel error, unable to use: {}'.format(c,_e)
-    
+    """
+
   # 写入数据表
   result = []
   for keyword,channel_name,_chat_id in res:
@@ -566,14 +602,21 @@ def update_subscribe(user_id,keyword_channel_list):
 async def start(event):
   """Send a message when the command /start is issued."""
   # insert chat_id
-  chat_id = event.message.chat.id
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
 
   if chat_id:
-    await event.respond(f'Your Telegram Chat ID is: `{chat_id}`')
+    print (f'Your Telegram Chat ID is: `{chat_id}`')
+    # await event.respond(f'Your Telegram Chat ID is: `{chat_id}`')
 
   # 访问授权检查
   if not is_allow_access(chat_id):
-    await event.respond('Opps! I\'m a private bot. 对不起, 这是一个私人专用的Bot')
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
     raise events.StopPropagation
 
   find = utils.db.user.get_or_none(chat_id=chat_id)
@@ -586,9 +629,9 @@ async def start(event):
     insert_res = True
 
   if insert_res:
-    await event.respond('Hi! Please input /help , access usage.')
+    await event.respond('请使用 /help 查看使用说明')
   else:
-    await event.respond('Opps! Please try again /start ')
+    await event.respond('请输入 /start 命令')
   
   raise events.StopPropagation
 
@@ -596,26 +639,38 @@ async def start(event):
 async def subscribe(event):
   """Send a message when the command /subscribe is issued."""
   # insert chat_id
-  chat_id = event.message.chat.id
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
+
   if not is_allow_access(chat_id):
-    await event.respond('Opps! I\'m a private bot. 对不起, 这是一个私人专用的Bot')
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
     raise events.StopPropagation
   
   find = utils.db.user.get_or_none(chat_id=chat_id)
   user_id = find
   if not find:# 不存在用户信息
-    await event.respond('Failed. Please input /start')
+    await event.respond('请输入 /start 命令')
     raise events.StopPropagation
   
   text = event.message.text
   text = text.replace('，',',')# 替换掉中文逗号
   text = regex.sub('\s*,\s*',',',text) # 确保英文逗号间隔中间都没有空格  如 "https://t.me/xiaobaiup, https://t.me/com9ji"
   splitd = [i for i in regex.split('\s+',text) if i]# 删除空元素
+  '''
   if len(splitd) <= 1:
     await event.respond('输入需要订阅的关键字,支持js正则语法：`/[\s\S]*/ig`\n\nInput the keyword that needs to subscribe, support JS regular syntax：`/[\s\S]*/ig`')
     cache.set('status_{}'.format(chat_id),{'current_status':'/subscribe keywords','record_value':text},expire=5*60)#设置5m后过期
-  elif len(splitd)  == 3:
-    command, keywords, channels = splitd
+  elif len(splitd)  == 3
+  '''
+  if len(splitd)  == 2:
+    # command, keywords, channels = splitd
+    command, keywords = splitd
+    channels = '1'
     result = await join_channel_insert_subscribe(user_id,parse_full_command(command, keywords, channels))
     if isinstance(result,str): 
         logger.error('join_channel_insert_subscribe 错误：'+result)
@@ -628,13 +683,17 @@ async def subscribe(event):
 
         if not channel:
           channel = f'<a href="t.me/c/{_chat_id}/">{_chat_id}</a>'
-        msg += f'keyword:{key}  channel:{channel}\n'
+        # msg += f'keyword:{key}  channel:{channel}\n'
+        msg += f'keyword:{key}\n'
       if msg:
         msg = 'success subscribe:\n'+msg 
         text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
         for text, entities in telethon_utils.split_text(text, entities):
           await event.respond(text,formatting_entities=entities) 
         #await event.respond('success subscribe:\n'+msg,parse_mode = None)
+  else:
+    await event.respond('命令格式不正确')  
+
   raise events.StopPropagation
 
 
@@ -642,10 +701,21 @@ async def subscribe(event):
 async def unsubscribe_all(event):
   """Send a message when the command /unsubscribe_all is issued."""
   # insert chat_id
-  chat_id = event.message.chat.id
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
+
+  if not is_allow_access(chat_id):
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
+    raise events.StopPropagation
+  
   find = utils.db.user.get_or_none(chat_id=chat_id)
   if not find:# 不存在用户信息
-    await event.respond('Failed. Please input /start')
+    await event.respond('请输入 /start 命令')
     raise events.StopPropagation
   user_id = find.id
   
@@ -655,7 +725,8 @@ async def unsubscribe_all(event):
     msg = ''
     for keywords,channel_name,chat_id in _user_subscribe_list:
       channel_url = get_channel_url(channel_name,chat_id)
-      msg += 'keyword: {}\nchannel: {}\n---\n'.format(keywords,channel_url)
+      # msg += 'keyword: {}\nchannel: {}\n---\n'.format(keywords,channel_url)
+      msg += 'keyword: {}\n---\n'.format(keywords)
 
     re_update = utils.db.user_subscribe_list.update(status = 1 ).where(utils.User_subscribe_list.user_id == user_id)#更新状态
     re_update = re_update.execute()# 更新成功返回1，不管是否重复执行
@@ -675,20 +746,31 @@ async def unsubscribe_id(event):
   '''
   根据id取消订阅
   '''
-  chat_id = event.message.chat.id
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
+
+  if not is_allow_access(chat_id):
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
+    raise events.StopPropagation
+    
   find = utils.db.user.get_or_none(chat_id=chat_id)
   user_id = find
   if not find:# 不存在用户信息
-    await event.respond('Failed. Please input /start')
+    await event.respond('请输入 /start 命令')
     raise events.StopPropagation
   text = event.message.text
   text = text.replace('，',',')# 替换掉中文逗号
   text = regex.sub('\s*,\s*',',',text) # 确保英文逗号间隔中间都没有空格  如 "https://t.me/xiaobaiup, https://t.me/com9ji"
   splitd = [i for i in regex.split('\s+',text) if i]# 删除空元素
-  if len(splitd) > 1:
+  if len(splitd) == 2:
     ids = [int(i) for i in splitd[1].split(',') if i.isnumeric()]
     if not ids:
-      await event.respond('Please input your unsubscribe_id. \ne.g. `/unsubscribe_id 123,321`')
+      await event.respond('请输入要取消订阅项的序号 \n示例 `/unsubscribe_id 123,321`')
       raise events.StopPropagation
     result = []
     for i in ids:
@@ -696,13 +778,9 @@ async def unsubscribe_id(event):
       re_update = re_update.execute()# 更新成功返回1，不管是否重复执行
       if re_update:
         result.append(i)
-    await event.respond('success unsubscribe id:{}'.format(result if result else 'None'))
-  elif len(splitd) < 2:
-    await event.respond('输入需要**取消订阅**的订阅id：\n\nEnter the subscription id of the channel where ** unsubscribe **is required:')
-    cache.set('status_{}'.format(chat_id),{'current_status':'/unsubscribe_id ids','record_value':None},expire=5*60)# 记录输入的关键字
-    raise events.StopPropagation
+    await event.respond('成功取消订阅项 序号:{}'.format(result if result else 'None'))
   else:
-    await event.respond('not found id')
+    await event.respond('命令格式不正确')  
   raise events.StopPropagation
   
 
@@ -710,11 +788,22 @@ async def unsubscribe_id(event):
 async def unsubscribe(event):
   """Send a message when the command /unsubscribe is issued."""
   # insert chat_id
-  chat_id = event.message.chat.id
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
+
+  if not is_allow_access(chat_id):
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
+    raise events.StopPropagation
+    
   find = utils.db.user.get_or_none(chat_id=chat_id)
   user_id = find
   if not find:# 不存在用户信息
-    await event.respond('Failed. Please input /start')
+    await event.respond('请输入 /start 命令')
     raise events.StopPropagation
   
 
@@ -722,111 +811,58 @@ async def unsubscribe(event):
   text = text.replace('，',',')# 替换掉中文逗号
   text = regex.sub('\s*,\s*',',',text) # 确保英文逗号间隔中间都没有空格  如 "https://t.me/xiaobaiup, https://t.me/com9ji"
   splitd = [i for i in regex.split('\s+',text) if i]# 删除空元素
+  '''
   if len(splitd) <= 1:
     await event.respond('输入需要**取消订阅**的关键字\n\nEnter a keyword that requires **unsubscribe**')
     cache.set('status_{}'.format(chat_id),{'current_status':'/unsubscribe keywords','record_value':text},expire=5*60)#设置5m后过期
   elif len(splitd)  == 3:
-    command, keywords, channels = splitd
+  '''
+  if len(splitd)  == 2:  
+    # command, keywords, channels = splitd
+    command, keywords = splitd
+    channels = '1'
     result = update_subscribe(user_id,parse_full_command(command, keywords, channels))
     # msg = ''
     # for key,channel in result:
     #   msg += 'keyword:{}  channel:{}\n'.format(key,channel)
     # if msg:
     #   await event.respond('success unsubscribe:\n'+msg,parse_mode = None)
-    await event.respond('success unsubscribe.')
+    await event.respond('成功订阅')
+  else:
+    await event.respond('命令格式不正确')  
 
   raise events.StopPropagation
 
-
-# 限制消息文本长度
-@bot.on(events.NewMessage(pattern='/setlengthlimit')) 
-async def setlengthlimit(event):
-    blacklist_type = 'length_limit'
-    command = r'/setlengthlimit'
-    # get chat_id
-    chat_id = event.message.chat.id
-    find = utils.db.user.get_or_none(chat_id=chat_id)
-    user_id = find
-    if not find:  # 用户信息不存在
-        await event.respond('Failed. Please input /start')
-        raise events.StopPropagation
-
-    # parse input
-    text = event.message.text
-    text = text.replace('，', ',')  # 替换掉中文逗号
-    text = regex.sub(f'^{command}', '', text).strip()  # 确保英文逗号间隔中间都没有空格
-    splitd = [i for i in text.split(',') if i]  # 删除空元素
-
-    find = utils.db.connect.execute_sql('select id,blacklist_value from user_block_list where user_id = ? and blacklist_type=? ' ,(user_id.id,blacklist_type)).fetchone()
-    if not splitd:
-      if find is None:
-        await event.respond(f'lengthlimit not found.')
-      else:
-        await event.respond(f'setlengthlimit `{find[1]}`')
-    else: # 传入多参数 e.g. /setlengthlimit 123
-      if len(splitd) == 1 and splitd[0].isdigit():
-        blacklist_value = int(splitd[0])
-
-        if find is None:
-          # create entry in UserBlockList
-          insert_res = utils.db.user_block_list.create(**{
-              'user_id': user_id,
-              'channel_name': '',
-              'chat_id': '',
-              'blacklist_type': blacklist_type,
-              'blacklist_value': blacklist_value,
-              'create_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-              'update_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-          })
-
-          if insert_res:
-              await event.respond(f'Success lengthlimit `{blacklist_value}`')
-          else:
-              await event.respond(f'Failed lengthlimit `{blacklist_value}`')
-        else:
-          update_query = utils.db.user_block_list.update(blacklist_value = blacklist_value,update_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')).where(utils.User_block_list.id == find[0])#更新状态
-          update_result = update_query.execute()# 更新成功返回1，不管是否重复执行
-          if update_result:
-            await event.respond(f'Success lengthlimit `{blacklist_value}`')
-          else:
-            await event.respond(f'Failed lengthlimit `{blacklist_value}`')
-    raise events.StopPropagation
-
-
 @bot.on(events.NewMessage(pattern='/help'))
 async def start(event):
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
+
+  if not is_allow_access(chat_id):
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
+    raise events.StopPropagation
+
   await event.respond('''
-
-目的：根据关键字订阅频道消息，支持群组
-
-支持多关键字和多频道订阅，使用英文逗号`,`间隔
-
-关键字和频道之间使用空格间隔
-
-主要命令：
-
+命令：
  - 订阅操作
-
-  /subscribe  关键字1,关键字2 tianfutong,xiaobaiup
-
-  /subscribe  关键字1,关键字2 https://t.me/tianfutong,https://t.me/xiaobaiup
+  /subscribe 关键字1,关键字2 
 
  - 取消订阅
-
-  /unsubscribe  关键字1,关键字2 https://t.me/tianfutong,https://t.me/xiaobaiup
+  /unsubscribe 关键字1,关键字2
 
  - 取消订阅id
-
-  /unsubscribe_id  1,2
+  /unsubscribe_id 1,2
 
  - 取消所有订阅
-
   /unsubscribe_all
 
  - 显示所有订阅列表
-
   /list
-
   ''')
   raise events.StopPropagation
 
@@ -834,7 +870,24 @@ async def start(event):
 # 删除当前记录的用户状态
 @bot.on(events.NewMessage(pattern='/cancel'))
 async def cancel(event):
-  chat_id = event.message.chat.id
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
+
+  if not is_allow_access(chat_id):
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
+    raise events.StopPropagation
+
+  find = utils.db.user.get_or_none(chat_id=chat_id)
+  user_id = find
+  if not find:  # 用户信息不存在
+      await event.respond('请输入 /start 命令')
+      raise events.StopPropagation
+
   _ = cache.delete('status_{}'.format(chat_id))
   if _ :
     await event.respond('success cancel.')
@@ -843,7 +896,23 @@ async def cancel(event):
 # 查询当前用户的所有订阅
 @bot.on(events.NewMessage(pattern='/list'))
 async def _list(event):
-  chat_id = event.message.chat.id
+  chat_id = None
+  if hasattr(event.message, "chat"):
+    if hasattr(event.message.chat, "id"):
+      chat_id = event.message.chat.id
+  if not chat_id:
+    raise events.StopPropagation
+
+  if not is_allow_access(chat_id):
+    print('你没有使用权限')
+    # await event.respond('你没有使用权限')
+    raise events.StopPropagation
+    
+  find = utils.db.user.get_or_none(chat_id=chat_id)
+  user_id = find
+  if not find:  # 用户信息不存在
+      await event.respond('请输入 /start 命令')
+      raise events.StopPropagation
   find = utils.db.user.get_or_none(**{
       'chat_id':chat_id,
   })
@@ -878,16 +947,14 @@ async def _list(event):
             if channel_entity.username:
               if channel_entity.username != channel_name:
                 channel_name += '\t[CHANNEL NAME EXPIRED]'# 标记频道名称过期
-                # channel_name = '' # 不显示
-                logger.info(f'channel username:{channel_name} expired.')
+                logger.debug(f'channel username:{channel_name} expired.')
             else:
               channel_name += '\t[CHANNEL NONE EXPIRED]'# 标记频道名称过期.当前不存在
-              # channel_name = '' # 不显示
-              logger.info(f'channel username:{channel_name} expired. current none')
+              logger.debug(f'channel username:{channel_name} expired. current none')
         elif chat_id:# 只有chat_id
           if channel_entity and channel_entity.username:
             channel_name = channel_entity.username
-            logger.info(f'channel chat_id:{chat_id} username:{channel_name}')
+            logger.debug(f'channel chat_id:{chat_id} username:{channel_name}')
 
         channel_username = ''
         if channel_entity:# 有实体信息才显示频道名
@@ -895,7 +962,8 @@ async def _list(event):
             channel_username = f'channel username: {channel_name}\n'
 
         channel_url = f'<a href="{channel_url}">{"https://t.me/"+channel_name if channel_name else channel_url}</a>'
-        msg += f'id:{sub_id}\n{_type}: {keywords}\n{channel_title}{channel_username}channel: {channel_url}\n---\n'
+        # msg += f'id:{sub_id}\n{_type}: {keywords}\n{channel_title}{channel_username}channel: {channel_url}\n---\n'
+        msg += f'id:{sub_id}\n{_type}: {keywords}\n---\n'
       
       text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
       for text, entities in telethon_utils.split_text(text, entities):
@@ -904,93 +972,7 @@ async def _list(event):
     else:
       await event.respond('not found list')
   else:
-    await event.respond('please /start')
-  raise events.StopPropagation
-
-
-# 其余消息的统一处理方法
-@bot.on(events.NewMessage)
-async def common(event):
-  """Echo the user message."""
-  chat_id = event.message.chat.id
-  text = event.text
-  text = text.replace('，',',')# 替换掉中文逗号
-  text = regex.sub('\s*,\s*',',',text) # 确保英文逗号间隔中间都没有空格  如 "https://t.me/xiaobaiup, https://t.me/com9ji"
-
-  find = cache.get('status_{}'.format(chat_id))
-  if find:
-
-    # 执行订阅
-    if find['current_status'] == '/subscribe keywords':# 当前输入关键字
-      await event.respond('输入需要订阅的频道url或者name：\n\nEnter the url or name of the channel to subscribe to:')
-      cache.set('status_{}'.format(chat_id),{'current_status':'/subscribe channels','record_value':find['record_value'] + ' ' + text},expire=5*60)# 记录输入的关键字
-      raise events.StopPropagation
-    elif find['current_status'] == '/subscribe channels':# 当前输入频道
-      full_command = find['record_value'] + ' ' + text
-      splitd = [i for i in regex.split('\s+',full_command) if i]# 删除空元素
-      if len(splitd)  != 3:
-        await event.respond('关键字请不要包含空格 可使用正则表达式解决\n\nThe keyword must not contain Spaces.')
-        raise events.StopPropagation
-      command, keywords, channels = splitd
-      user_id = utils.db.user.get_or_none(chat_id=chat_id)
-      result = await join_channel_insert_subscribe(user_id,parse_full_command(command, keywords, channels))
-      if isinstance(result,str): 
-        await event.respond(result,parse_mode = None) # 提示错误消息
-      else:
-        msg = ''
-        for key,channel,_chat_id in result:
-          if _chat_id:
-            _chat_id, peer_type = telethon_utils.resolve_id(int(_chat_id))
-          
-          if not channel:
-            channel = f'<a href="t.me/c/{_chat_id}/">{_chat_id}</a>'
-          msg += f'keyword:{key}  channel:{channel}\n'
-        if msg:
-          # await event.respond('success subscribe:\n'+msg,parse_mode = None)
-          msg = 'success subscribe:\n'+msg 
-          text, entities = html.parse(msg)# 解析超大文本 分批次发送 避免输出报错
-          for text, entities in telethon_utils.split_text(text, entities):
-            await event.respond(text,formatting_entities=entities) 
-
-      cache.delete('status_{}'.format(chat_id))
-      raise events.StopPropagation
-    
-    #取消订阅
-    elif find['current_status'] == '/unsubscribe keywords':# 当前输入关键字
-      await event.respond('输入需要**取消订阅**的频道url或者name：\n\nEnter the url or name of the channel where ** unsubscribe **is required:')
-      cache.set('status_{}'.format(chat_id),{'current_status':'/unsubscribe channels','record_value':find['record_value'] + ' ' + text},expire=5*60)# 记录输入的关键字
-      raise events.StopPropagation
-    elif find['current_status'] == '/unsubscribe channels':# 当前输入频道
-      full_command = find['record_value'] + ' ' + text
-      splitd = [i for i in regex.split('\s+',full_command) if i]# 删除空元素
-      if len(splitd)  != 3:
-        await event.respond('关键字请不要包含空格 可使用正则表达式解决\n\nThe keyword must not contain Spaces.')
-        raise events.StopPropagation
-      command, keywords, channels = splitd
-      user_id = utils.db.user.get_or_none(chat_id=chat_id)
-      result = update_subscribe(user_id,parse_full_command(command, keywords, channels))
-      # msg = ''
-      # for key,channel in result:
-      #   msg += '{},{}\n'.format(key,channel)
-      # if msg:
-      #   await event.respond('success:\n'+msg,parse_mode = None)
-      await event.respond('success unsubscribe..')
-
-      cache.delete('status_{}'.format(chat_id))
-      raise events.StopPropagation
-    elif find['current_status'] == '/unsubscribe_id ids':# 当前输入订阅id
-      splitd =  text.strip().split(',')
-      user_id = utils.db.user.get_or_none(chat_id=chat_id)
-      result = []
-      for i in splitd:
-        if not i.isdigit():
-          continue
-        i = int(i)
-        re_update = utils.db.user_subscribe_list.update(status = 1 ).where(utils.User_subscribe_list.id == i,utils.User_subscribe_list.user_id == user_id)#更新状态
-        re_update = re_update.execute()# 更新成功返回1，不管是否重复执行
-        if re_update:
-          result.append(i)
-      await event.respond('success unsubscribe id:{}'.format(result if result else 'None'))
+    await event.respond('请输入 /start 命令')
   raise events.StopPropagation
 
 if __name__ == "__main__":
